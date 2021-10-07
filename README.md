@@ -1,5 +1,16 @@
 # Constrained-Stochastic-Optimization-Inequality
 
-This respository implements stochastic SQP schemes that use the augmented Lagrangian merit function. We solve 39 probblems with inequality constraints in the CUTEst test set. 
+This respository reproduces the results of the paper [Inequality Constrained Stochastic Nonlinear Optimization via Active-Set Sequential Quadratic Programming](https://arxiv.org/abs/2109.11502). It implements stochastic active-set SQP schemes, that use the augmented Lagrangian merit function, on 39 probblems with inequality constraints in CUTEst test set. 
 
 The setup of CUTEst is available at https://github.com/JuliaSmoothOptimizers/CUTEst.jl.
+
+To use code, please cite the paper 
+```
+@article{na2021inequality,
+  title={Inequality Constrained Stochastic Nonlinear Optimization via Active-Set Sequential Quadratic Programming},
+  author={Na, Sen and Anitescu, Mihai and Kolar, Mladen},
+  journal={arXiv preprint arXiv:2109.11502},
+  year={2021}
+}
+```
+
