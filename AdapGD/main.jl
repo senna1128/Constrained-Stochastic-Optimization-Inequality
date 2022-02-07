@@ -1,25 +1,3 @@
-#=
-Pkg.add("NLPModels")
-Pkg.add("JuMP")
-Pkg.add("LinearOperators")
-Pkg.add("OptimizationProblems")
-Pkg.add("MathProgBase")
-Pkg.add("ForwardDiff")
-Pkg.add("CUTEst")
-Pkg.add("NLPModelsJuMP")
-Pkg.add("LinearAlgebra")
-Pkg.add("Distributed")
-Pkg.add("Ipopt")
-Pkg.add("DataFrames")
-Pkg.add("PyPlot")
-Pkg.add("MATLAB")
-Pkg.add("ADNLPModels")
-Pkg.add("Glob")
-Pkg.add("DelimitedFiles")
-Pkg.add("Random")
-Pkg.add("Distributions")
-=#
-
 
 ## Load packages
 using NLPModels
@@ -43,7 +21,6 @@ using Random
 using Distributions
 
 cd("/.../AdapGD")
-
 ######################################
 ######  Load problems    #############
 ######################################
@@ -53,55 +30,63 @@ Prob = readdlm(string(pwd(),"/../Parameter/problems.txt"))
 module Parameter
     struct AdapNewtonParams
         verbose                            # Do we create dump dir?
+        # stopping parameters
         MaxIter::Int                       # Maximum Iteration
-        EPS::Float64                       # minimum of difference
-        Rep::Int                           # Number of Independent runs
-        alpha_max::Float64                 # maximum of stepsize
-        eta::Float64                       # penalty parameter
-        nu::Float64                        # nu
+        EPS_Step::Float64                  # minimum of difference
+        EPS_Res::Float64                   # minimum of difference
+        # adaptive parameters
         epsilon::Float64                   # epsilon
+        eta::Float64                       # penalty parameter
         delta::Float64                     # delta
+        # fixed parameters
+        Rep::Int                           # Number of Independent runs
         beta::Float64                      # beta
+        alpha_max::Float64                 # maximum of stepsize
         rho::Float64                       # rho
         kap_grad::Float64                  # kappa of gradient
         kap_f::Float64                     # kappa of f
         p_grad::Float64                    # prob of gradient
         p_f::Float64                       # prob of f
-        C_grad::Float64                    # constant of gradient
+        # test parameters
+        C_grad::Array{Float64}             # constant of gradient
         Sigma::Array{Float64}              # variance of gradient
     end
 
     struct AdapGDParams
         verbose                            # Do we create dump dir?
+        # stopping parameters
         MaxIter::Int                       # Maximum Iteration
-        EPS::Float64                       # minimum of difference
-        Rep::Int                           # Number of Independent runs
-        alpha_max::Float64                 # maximum of stepsize
-        eta::Float64                       # penalty parameter
-        nu::Float64                        # nu
+        EPS_Step::Float64                  # minimum of difference
+        EPS_Res::Float64                   # minimum of difference
+        # adaptive parameters
         epsilon::Float64                   # epsilon
+        eta::Float64                       # penalty parameter
         delta::Float64                     # delta
+        # fixed parameters
+        Rep::Int                           # Number of Independent runs
         beta::Float64                      # beta
+        alpha_max::Float64                 # maximum of stepsize
         rho::Float64                       # rho
         kap_grad::Float64                  # kappa of gradient
         kap_f::Float64                     # kappa of f
         p_grad::Float64                    # prob of gradient
         p_f::Float64                       # prob of f
-        C_grad::Float64                    # constant of gradient
+        # test parameters
+        C_grad::Array{Float64}             # constant of gradient
         Sigma::Array{Float64}              # variance of gradient
     end
 
     struct NonAdapParams
         verbose                            # Do we create dump dir?
         MaxIter::Int                       # Maximum Iteration
-        EPS::Float64                       # minimum of difference
+        EPS_Step::Float64                  # minimum of difference
+        EPS_Res::Float64                   # minimum of difference
         Rep::Int                           # Number of Independent runs
         NoAdapCAlpha::Array{Float64}       # Nonadaptive constant stepsize
         NoAdapDAlpha::Array{Float64}       # Nonadaptive decay stepsize 1/(K^p) with 0.5<p<1
         epsilon::Float64                   # epsilon
         Sigma::Array{Float64}              # variance of gradient
     end
-
 
 end
 
@@ -118,11 +103,21 @@ function main()
     ## include parameter
     include("../Parameter/Param.jl")
     ## run adaptive SQPGD
-    AdapG38 = AdapGDMain(AdapGD, Prob)
+    AdapG = AdapGDMain(AdapGD, Prob)
     ## save result
     if AdapGD.verbose
-        write_matfile("../Solution/AdapGD.mat"; AdapG38)
+        NumProb = 10
+        decom = convert(Int64, floor(length(AdapG)/NumProb))
+        for i = 1:decom
+            path = string("../Solution/AdapGD", i, ".mat")
+            Result = AdapG[(i-1)*NumProb+1:i*NumProb]
+            write_matfile(path; Result)
+        end
+        path = string("../Solution/AdapGD", decom+1, ".mat")
+        Result = AdapG[decom*NumProb+1:end]
+        write_matfile(path; Result)
     end
+
 end
 
 main()

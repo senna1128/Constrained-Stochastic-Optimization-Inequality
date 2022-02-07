@@ -20,11 +20,12 @@ include("EstAugL.jl")
 ### IdSing: indicator of singular
 
 
-function AdapGDSQP(nlp,sigma,Max_Iter,EPS,alpha_max,eta,nu,epsilon,delta,beta,rho,kap_grad,kap_f,p_grad,p_f,C_grad)
+function AdapGDSQP(nlp,sigma,Max_Iter,EPS_Step,EPS_Res,alpha_max,eta,epsilon,delta,beta,rho,kap_grad,kap_f,p_grad,p_f,C_grad)
     # Define constraint types
     nx, necon, nucon, nlcon = nlp.meta.nvar, length(nlp.meta.jfix), length(nlp.meta.jupp), length(nlp.meta.jlow)
     IdUpp, IdLow = necon + 1, necon + nucon + 1
     nicon, ncon = nucon + nlcon, necon + nucon + nlcon
+
     # Define constraint bound vector to convert lower bound constraint
     # we order constraints as equality, upper, lower
     BV = zeros(ncon)
@@ -59,6 +60,7 @@ function AdapGDSQP(nlp,sigma,Max_Iter,EPS,alpha_max,eta,nu,epsilon,delta,beta,rh
     Q_23 = 2*(G_k.*c_k.*MuLam[end])'[:,IdUpp:end]
     M_k = G_k*G_k' + Diagonal([zeros(necon); c_k[IdUpp:end].^2])
     G_ktl = G_k'*[zeros(necon); max.(c_k[IdUpp:end],zeros(nicon)).^2]
+
     # Lagrangian gradient and its Hessian, and KKT
     nab_xL_k = nabf_k + G_ktMuLam_k
     nab_x2L_k = hess(nlp, X[end], obj_weight=1.0, un_MuLam)
@@ -70,22 +72,19 @@ function AdapGDSQP(nlp,sigma,Max_Iter,EPS,alpha_max,eta,nu,epsilon,delta,beta,rh
     # Quantities in While loop used outside need to be defined first
     bnab_augL_k, bnab_augL_k1, J_2c = zeros(nx+ncon), zeros(nx+ncon), zeros(nicon)
     omega_epsnu_xlam, act_set, Equ_Act = zeros(nicon), [], []
-    SQPDir = zeros(nx+ncon)
+    SQPDir, BarSQP = zeros(nx+ncon), zeros(nx+ncon)
 
-#    NewDir =  zeros(nx+ncon)
-#    bnabL_aug_k, Quant  = zeros(nx+ncon), 0
+    T_nu = sum(max.(c_k[IdUpp:end],zeros(nicon)).^3 )
+    nu = 2*T_nu+1
+    Count_G,Count_F,Alpha = [],[],[]
 
     # start the iteration
     Time = time()
-    while min(eps, KKT[end]) > EPS && k < Max_Iter
+    while eps>EPS_Step && KKT[end]>EPS_Res && k<Max_Iter
         ## Obtain the estimate for bnabf_k, bnab2f_k
         bnabf_k, bnab2f_k, Xi = EstGandH(nx,Xi,nabf_k,nab2f_k,G_ktMuLam_k,DKKT_k,sigma,CovM,alpha_k,kap_grad,p_grad,C_grad)
-        CountSam += Xi
-        ## Compute nu
-        T_nu = sum( max.(c_k[IdUpp:end],zeros(nicon)).^3 )
-        if T_nu > nu/2
-            nu = max(2*T_nu+1, rho*nu)
-        end
+        push!(Count_G, Xi)
+
         ## Compute epsilon_k
         # estimated Lagrangian gradient, Hessian, and intermediate quantities
         bnab_xL_k = bnabf_k + G_ktMuLam_k
@@ -136,6 +135,7 @@ function AdapGDSQP(nlp,sigma,Max_Iter,EPS,alpha_max,eta,nu,epsilon,delta,beta,rh
                 end
             end
         end
+
         ## Decide the search direction
         if ((bnab_augL_k - bnab_augL_k1)'SQPDir)[1]>eta/4*norm([SQPDir[1:nx];J_1;J_2c])^2 || IdSing == 1
             # Compute Hessian
@@ -144,58 +144,72 @@ function AdapGDSQP(nlp,sigma,Max_Iter,EPS,alpha_max,eta,nu,epsilon,delta,beta,rh
             BarSQP = SQPDir
         end
 
-        # Estimate function values
-        Quant1 = (bnab_augL_k'BarSQP)[1]
-        Quant2 = min((kap_f*alpha_k^2*Quant1)^2,delta^2,1)
-        Xi_f = min(C_grad*log(1/p_f)/Quant2, 100000)
-        CountSam += Xi_f
-        baugL_k,baugL_sk = EstAugL(nlp,nx,necon,nicon,IdLow,IdUpp,eta,epsilon,nu,sigma,CovM,Xi_f,f_k,c_k,X[end],MuLam[end],nabf_k,G_k,G_ktMuLam_k,q_nuxlam,omega_epsnu_xlam,alpha_k,BarSQP,BV,diagg2lam)
-
-        if baugL_sk <= baugL_k + alpha_k*beta*Quant1
-            push!(X, X[end]+alpha_k*BarSQP[1:nx])
-            push!(MuLam, MuLam[end]+ alpha_k*BarSQP[nx+1:end])
-            eps, k = norm(alpha_k*BarSQP), k+1
-            un_MuLam[nlp.meta.jfix] = MuLam[end][1:necon]
-            un_MuLam[nlp.meta.jupp] = MuLam[end][IdUpp:IdLow-1]
-            un_MuLam[nlp.meta.jlow] = -MuLam[end][IdLow:end]
-            # prepare for the next iteration
-            f_k, nabf_k = objgrad(nlp, X[end])
-            nab2f_k = hess(nlp, X[end])
-            un_c_k, un_G_k = consjac(nlp, X[end])
-            for i = 1:ncon
-                un_nab2c_k[i] = hess(nlp,X[end],obj_weight=1.0,1:ncon.==i)-nab2f_k
-            end
-            c_k = [un_c_k[nlp.meta.jfix];un_c_k[nlp.meta.jupp]-BV[IdUpp:IdLow-1];-un_c_k[nlp.meta.jlow]+BV[IdLow:end]]
-            G_k = [un_G_k[nlp.meta.jfix,:];un_G_k[nlp.meta.jupp,:];-un_G_k[nlp.meta.jlow,:]]
-            nab2c_k = [un_nab2c_k[nlp.meta.jfix];un_nab2c_k[nlp.meta.jupp];-un_nab2c_k[nlp.meta.jlow]]
-            # Some intermediate quantities
-            G_ktMuLam_k = G_k'MuLam[end]
-            diagg2lam = ((c_k.^2).*MuLam[end])[IdUpp:end]
-            DKKT_k = [c_k[1:necon]; max.(c_k[IdUpp:end], -MuLam[end][IdUpp:end])]
-            Q_23 = 2*(G_k.*c_k.*MuLam[end])'[:,IdUpp:end]
-            M_k = G_k*G_k' + Diagonal([zeros(necon); c_k[IdUpp:end].^2])
-            G_ktl = G_k'*[zeros(necon); max.(c_k[IdUpp:end],zeros(nicon)).^2]
-            nab_xL_k = nabf_k + G_ktMuLam_k
-            nab_x2L_k = hess(nlp, X[end], obj_weight=1.0, un_MuLam)
-            # KKT Vector
-            push!(KKT, norm([nab_xL_k; DKKT_k]) )
-            if -alpha_k*beta*Quant1 >= delta
-                delta *= rho
-                alpha_k = min(alpha_max, rho*alpha_k)
-            else
-                delta /= rho
-                alpha_k = min(alpha_max, rho*alpha_k)
-            end
-        else
+        XX = X[end]+alpha_k*BarSQP[1:nx]
+        uun_c_k= cons(nlp, XX)
+        cc_k = [uun_c_k[nlp.meta.jfix];uun_c_k[nlp.meta.jupp]-BV[IdUpp:IdLow-1];-uun_c_k[nlp.meta.jlow]+BV[IdLow:end]]
+        TT_nu = sum( max.(cc_k[IdUpp:end],zeros(nicon)).^3 )
+        if TT_nu > nu/2
+            nu = 2^(ceil(log(2*TT_nu/nu)/log(2)))*nu
             k += 1
-            alpha_k /= rho
-            delta /= rho
+        else
+            # Estimate function values
+            Quant1 = (bnab_augL_k'BarSQP)[1]
+            Quant2 = min((kap_f*alpha_k^2*Quant1)^2,delta^2,1)
+            Xi_f = min(C_grad*log(nx/p_f)/Quant2, 100000)
+            if isnan(Xi_f)
+                return [],[],[],[],[],[],0,0
+            end
+            push!(Count_F, Xi_f)
+            baugL_k,baugL_sk = EstAugL(nlp,nx,necon,nicon,IdLow,IdUpp,eta,epsilon,nu,sigma,CovM,Xi_f,f_k,c_k,X[end],MuLam[end],nabf_k,G_k,G_ktMuLam_k,q_nuxlam,omega_epsnu_xlam,alpha_k,BarSQP,BV,diagg2lam)
+
+            if baugL_sk <= baugL_k + alpha_k*beta*Quant1
+                push!(X, X[end]+alpha_k*BarSQP[1:nx])
+                push!(MuLam, MuLam[end]+ alpha_k*BarSQP[nx+1:end])
+                push!(Alpha, alpha_k)
+                eps, k = norm(alpha_k*BarSQP), k+1
+                un_MuLam[nlp.meta.jfix] = MuLam[end][1:necon]
+                un_MuLam[nlp.meta.jupp] = MuLam[end][IdUpp:IdLow-1]
+                un_MuLam[nlp.meta.jlow] = -MuLam[end][IdLow:end]
+                # prepare for the next iteration
+                f_k, nabf_k = objgrad(nlp, X[end])
+                nab2f_k = hess(nlp, X[end])
+                un_c_k, un_G_k = consjac(nlp, X[end])
+                for i = 1:ncon
+                    un_nab2c_k[i] = hess(nlp,X[end],obj_weight=1.0,1:ncon.==i)-nab2f_k
+                end
+                c_k = [un_c_k[nlp.meta.jfix];un_c_k[nlp.meta.jupp]-BV[IdUpp:IdLow-1];-un_c_k[nlp.meta.jlow]+BV[IdLow:end]]
+                G_k = [un_G_k[nlp.meta.jfix,:];un_G_k[nlp.meta.jupp,:];-un_G_k[nlp.meta.jlow,:]]
+                nab2c_k = [un_nab2c_k[nlp.meta.jfix];un_nab2c_k[nlp.meta.jupp];-un_nab2c_k[nlp.meta.jlow]]
+                T_nu = sum(max.(c_k[IdUpp:end],zeros(nicon)).^3 )
+                # Some intermediate quantities
+                G_ktMuLam_k = G_k'MuLam[end]
+                diagg2lam = ((c_k.^2).*MuLam[end])[IdUpp:end]
+                DKKT_k = [c_k[1:necon]; max.(c_k[IdUpp:end], -MuLam[end][IdUpp:end])]
+                Q_23 = 2*(G_k.*c_k.*MuLam[end])'[:,IdUpp:end]
+                M_k = G_k*G_k' + Diagonal([zeros(necon); c_k[IdUpp:end].^2])
+                G_ktl = G_k'*[zeros(necon); max.(c_k[IdUpp:end],zeros(nicon)).^2]
+                nab_xL_k = nabf_k + G_ktMuLam_k
+                nab_x2L_k = hess(nlp, X[end], obj_weight=1.0, un_MuLam)
+                # KKT Vector
+                push!(KKT, norm([nab_xL_k; DKKT_k]) )
+                if -alpha_k*beta*Quant1 >= delta
+                    delta *= rho
+                    alpha_k = min(alpha_max, rho*alpha_k)
+                else
+                    delta /= rho
+                    alpha_k = min(alpha_max, rho*alpha_k)
+                end
+            else
+                k += 1
+                alpha_k /= rho
+                delta /= rho
+            end
         end
     end
     Time = time() - Time
     if k == Max_Iter
-        return [], [], [], 0, Time, 0
+        return [],[],[],[],[],[],Time,0
     else
-        return X, MuLam, KKT, floor(CountSam), Time, 1
+        return X,MuLam,KKT,Count_G,Count_F,Alpha,Time, 1
     end
 end

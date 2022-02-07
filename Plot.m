@@ -1,203 +1,148 @@
 %% This fucntion draws plot for simulation
-%{
 clear all; close all
-d = dir('./Solution/*.mat');
+
 A = dir(fullfile('./Figure/*'));
 if ~isempty(A)
-    for k = 1:length(A)
+    for k = 3:length(A)
         delete(strcat('./Figure/', A(k).name))
     end
     fprintf('remove result file. Done!\n')
 else
     fprintf('No result file.\n')
 end
-%}
-%% load file
-for i = 1:length(d)
-    load(['./Solution/',d(i).name])
-end
-%% Extract AdapNewton result
-for sigma = 1:5
-    KKTVec = [];
-    TimeVec = [];
-    CountVec = [];
-    for Idprob = 1:23
-        ll = length(AdapN{Idprob}.KKTStep{sigma});
-        if ll > 0
-            a = [];
-            b = [];
-            c = [];
-            for lll = 1:ll 
-                a = [a; AdapN{Idprob}.KKTStep{sigma}{lll}(end)];
-                b = [b; AdapN{Idprob}.CountStep{sigma}{lll}(end)];
-                c = [c; AdapN{Idprob}.TimeStep{sigma}{lll}(end)];
-            end
-            KKTVec = [KKTVec; min(a)];
-            CountVec = [CountVec; min(b)];
-            TimeVec = [TimeVec; min(c)];
+
+
+load('./Solution/AdapNewton.mat')
+load('./Solution/AdapGD.mat')
+load('./Solution/NonAdap.mat')
+
+
+%% global color
+col = horzcat(hsv(3),ones(3,1)*0.5)';
+col2 = col(:,2:3); 
+
+
+%% Plot KKT residual with constant 1
+for step = 1:6 
+    for sigma = 1:5
+        AR{sigma} = Res{sigma,1}.KKT;
+        BR{sigma} = ResG{sigma,1}.KKT;
+        if length(ResN{step,sigma}.KKT)>0
+            CR{sigma} = ResN{step,sigma}.KKT;
+        else
+            CR{sigma} = [NaN];
         end 
-    end 
-    AdapNKKT{sigma} = KKTVec;
-    AdapNCount{sigma} = CountVec;
-    AdapNTime{sigma} = TimeVec;
+    end
+    data=vertcat(AR,BR,CR)';
+    xlab={'1e-8','1e-4','1e-2','1e-1','1'};
+    Mlab={'AdapNewton','AdapGD','NonAdapSQP'};
+    figure(step)
+    multiple_boxplot(data,xlab,Mlab,col,1,0)
+%    filename = ['./Figure/KKTStep' num2str(step) '.png'];
+%    print('-dpng', filename)
 end
 
 
-%% Extract AdapGD result
+%% Plot KKT residual with varying constant
+for cons = 1:4 
+    for sigma = 1:5
+        AR{sigma} = Res{sigma,cons}.KKT;
+        BR{sigma} = ResG{sigma,cons}.KKT;
+    end
+    data=vertcat(AR,BR)';
+    xlab={'1e-8','1e-4','1e-2','1e-1','1'};
+    Mlab={'AdapNewton','AdapGD'};
+    figure(10+cons)
+    multiple_boxplot(data,xlab,Mlab,col2,1.5,0)
+%    filename = ['./Figure/KKTCons' num2str(cons) '.png'];
+%    print('-dpng', filename)
+end
+
+
+%% Plot Sample size
+for cons = 1:4
+    for sigma = 1:5
+        AR{sigma} = Res{sigma,cons}.CountG;
+        BR{sigma} = ResG{sigma,cons}.CountG;
+    end
+    data=vertcat(AR,BR)';
+    xlab={'1e-8','1e-4','1e-2','1e-1','1'};
+    Mlab={'AdapNewton','AdapGD'};
+    figure(100+cons)
+    multiple_boxplot(data,xlab,Mlab,col2,2,0)    
+%    filename = ['./Figure/GSampleCons' num2str(cons) '.png'];
+%    print('-dpng', filename)
+end
+
+
+for cons = 1:4
+    for sigma = 1:5
+        AR{sigma} = Res{sigma,cons}.CountF;
+        BR{sigma} = ResG{sigma,cons}.CountF;
+    end
+    data=vertcat(AR,BR)';
+    xlab={'1e-8','1e-4','1e-2','1e-1','1'};
+    Mlab={'AdapNewton','AdapGD'};
+    figure(200+cons)
+    multiple_boxplot(data,xlab,Mlab,col2,3,0)    
+%    filename = ['./Figure/FSampleCons' num2str(cons) '.png'];
+%    print('-dpng', filename)
+end
+
+%% Plot time
+for cons = 1:4
+    for sigma = 1:5
+        AR{sigma} = Res{sigma,cons}.Time;
+        BR{sigma} = ResG{sigma,cons}.Time;
+    end
+    data=vertcat(AR,BR)';
+    xlab={'1e-8','1e-4','1e-2','1e-1','1'};
+    Mlab={'AdapNewton','AdapGD'};
+    figure(300+cons)
+    multiple_boxplot(data,xlab,Mlab,col2,4,0)    
+%    filename = ['./Figure/Time' num2str(cons) '.png'];
+%    print('-dpng', filename)
+end
+
+
+%% Plot Stepsize
+cmap = jet(5);
 for sigma = 1:5
-    KKTVec = [];
-    TimeVec = [];
-    CountVec = [];
-    for Idprob = 1:23
-        ll = length(AdapG{Idprob}.KKTStep{sigma});
-        if ll > 0
-            a = [];
-            b = [];
-            c = [];
-            for lll = 1:ll 
-                a = [a; AdapG{Idprob}.KKTStep{sigma}{lll}(end)];
-                b = [b; AdapG{Idprob}.CountStep{sigma}{lll}(end)];
-                c = [c; AdapG{Idprob}.TimeStep{sigma}{lll}(end)];
-            end
-            KKTVec = [KKTVec; min(a)];
-            CountVec = [CountVec; min(b)];
-            TimeVec = [TimeVec; min(c)];
-        end 
-    end 
-    AdapGKKT{sigma} = KKTVec;
-    AdapGCount{sigma} = CountVec;
-    AdapGTime{sigma} = TimeVec;
-end
-
-
-
-%% Extract nonadaptive result 
-for ConStep = 1:4
-    for sigma = 1:5 
-        KKTVec = [];
-        TimeVec = [];
-        CountVec = [];
-        for Idprob = 1:39
-            ll = length(NonAdapR{Idprob}.KKTCStep{ConStep,sigma});
-            if ll > 0 
-                a = [];
-                b = [];
-                c = [];
-                for lll = 1:ll 
-                    a = [a; NonAdapR{Idprob}.KKTCStep{ConStep,sigma}{lll}(end)];
-                    b = [b; NonAdapR{Idprob}.TimeCStep{ConStep,sigma}{lll}(end)];
-                    c = [c; length(NonAdapR{Idprob}.KKTCStep{ConStep,sigma}{lll})];
-                end
-                if ~isnan(min(a))
-                    KKTVec = [KKTVec; min(a)];
-                    TimeVec = [TimeVec; min(b)];
-                    CountVec = [CountVec; min(c)];
-                end
-            end 
-        end
-        NonAdapCKKT{ConStep,sigma} = KKTVec;
-        NonAdapCTime{ConStep,sigma} = TimeVec;
-        NonAdapCCount{ConStep,sigma} = CountVec;
-    end 
-end
-
-for DecayStep = 1:2
-    for sigma = 1:5 
-        KKTVec = [];
-        TimeVec = [];
-        CountVec = [];
-        for Idprob = 1:39
-            ll = length(NonAdapR{Idprob}.KKTDStep{DecayStep,sigma});
-            if ll > 0 
-                a = [];
-                b = [];
-                c = [];
-                for lll = 1:ll 
-                    a = [a; NonAdapR{Idprob}.KKTDStep{DecayStep,sigma}{lll}(end)];
-                    b = [b; NonAdapR{Idprob}.TimeDStep{DecayStep,sigma}{lll}(end)];
-                    c = [c; length(NonAdapR{Idprob}.KKTDStep{DecayStep,sigma}{lll})];
-                end
-                if ~isnan(min(a))
-                    KKTVec = [KKTVec; min(a)];
-                    TimeVec = [TimeVec; min(b)];
-                    CountVec = [CountVec; min(c)];
-                end
-            end 
-        end
-        NonAdapDKKT{DecayStep,sigma} = KKTVec;
-        NonAdapDTime{DecayStep,sigma} = TimeVec;
-        NonAdapDCount{DecayStep,sigma} = CountVec;
-    end 
-end
-
-
-
-%% Plot
-% Go over constant stepsize 
-for ConStep = 1:4
-    % Plot KKT residual
-    data = cell(5, 3);
-    for sigma = 1:size(data,1)
-        Ac{sigma} = AdapNKKT{sigma};
-        Bc{sigma} = AdapGKKT{sigma};
-        if length(NonAdapCKKT{ConStep, sigma})>0 
-            Cc{sigma} = NonAdapCKKT{ConStep, sigma};
-        else 
-            Cc{sigma} = [NaN];
-        end
+    figure(1000)
+    subplot(5,1,sigma)
+    ProbId = Res{sigma,1}.ProbId;
+    for ii = 1:5
+        plot(Res{sigma,1}.Alpha{ProbId(ii)}, 'Color', cmap(ii,:),'LineWidth',1)
+        set(gca,'fontsize',14)
+        hold on 
     end
-    data = vertcat(Ac,Bc,Cc);
-    xlab={'1e-8','1e-4','1e-2','1e-1','1'};
-    col=[102,255,255, 200;
-        51,153,255, 200;
-        0, 0, 255, 200];
-    col=col/255;
-    multiple_boxplot(data',xlab,{'AdapNewton', 'AdapGD', 'NonAdap'},col',1)
-    filename = ['./Figure/KKTCon' num2str(ConStep) '.png'];
-    print('-dpng', filename)
+    xLimits = get(gca,'XLim');    
+    line(xLimits,[1,1],'Color','black','LineStyle','--')
+    hold off
+%    filename = ['./Figure/StepA'  '.png'];
+%    print('-dpng', filename)   
+end     
     
-end
-
-% Go over decay steps
-
-for DecayStep = 1:2
-    % Plot KKT residual
-    data = cell(5, 3);
-    for sigma = 1:size(data,1)
-        Ac{sigma} = AdapNKKT{sigma};
-        Bc{sigma} = AdapGKKT{sigma};
-        if length(NonAdapDKKT{DecayStep, sigma})>0 
-            Cc{sigma} = NonAdapDKKT{DecayStep, sigma};
-        else 
-            Cc{sigma} = [NaN];
-        end
+for sigma = 1:5
+    figure(1001)
+    subplot(5,1,sigma)
+    ProbId = ResG{sigma,1}.ProbId;
+    for ii = 1:5
+        plot(ResG{sigma,1}.Alpha{ProbId(ii)}, 'Color', cmap(ii,:),'LineWidth',1)
+        set(gca,'fontsize',14)
+        hold on 
     end
-    data = vertcat(Ac,Bc,Cc);
-    xlab={'1e-8','1e-4','1e-2','1e-1','1'};
-    col=[102,255,255, 200;
-        51,153,255, 200;
-        0, 0, 255, 200];
-    col=col/255;
-    multiple_boxplot(data',xlab,{'AdapNewton', 'AdapGD', 'NonAdap'},col',1)
-    filename = ['./Figure/KKTDecay' num2str(DecayStep) '.png'];
-    print('-dpng', filename)
-    
-end
+    xLimits = get(gca,'XLim');    
+    line(xLimits,[1,1],'Color','black','LineStyle','--')
+    hold off
+%    filename = ['./Figure/StepAG' '.png'];
+%    print('-dpng', filename)
+end     
 
-% Plot consuming time
 
-data = cell(5,2);
-for sigma = 1:size(data,1)
-    Ac{sigma} = AdapNTime{sigma};
-    Bc{sigma} = AdapGTime{sigma};
-end
-data = vertcat(Ac,Bc);
-multiple_boxplot(data',xlab,{'AdapNewton', 'AdapGD'},col(2:3,:)',2)
-filename = ['./Figure/Time.png'];
-print('-dpng', filename)
+
 
     
-  
        
 
         

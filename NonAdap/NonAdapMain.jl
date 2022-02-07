@@ -17,7 +17,8 @@ end
 function NonAdapMain(NonAdap, Prob)
     # Obtain parameters
     Max_Iter = NonAdap.MaxIter
-    EPS = NonAdap.EPS
+    EPS_Step = NonAdap.EPS_Step
+    EPS_Res = NonAdap.EPS_Res
     TotalRep = NonAdap.Rep
     epsilon = NonAdap.epsilon
     StepCSet = NonAdap.NoAdapCAlpha
@@ -44,12 +45,12 @@ function NonAdapMain(NonAdap, Prob)
         # go over constant stepsize
         i = 1
         while i <= LenCStep
-            j = 1 
+            j = 1
             while j <= LenSigma
-                rep = 1 
+                rep = 1
                 while rep <= TotalRep
-                    println("NonAdapSQP ConstStep", Idprob, i, j, rep)
-                    X, MuLam, KKT, Time, IdCon, IdSing = NonAdapSQP(nlp,StepCSet[i],Sigma[j],Max_Iter,EPS,epsilon,1)                    
+                    println("NonAdapSQP ConstStep","-",Idprob,"-",i,"-",j,"-",rep)
+                    X, MuLam, KKT, Time, IdCon, IdSing = NonAdapSQP(nlp,StepCSet[i],Sigma[j],Max_Iter,EPS_Step,EPS_Res,epsilon,1)
                     if IdSing == 1
                         break
                     elseif IdCon == 0
@@ -61,9 +62,9 @@ function NonAdapMain(NonAdap, Prob)
                         push!(TimeCStep[i, j], Time)
                         rep += 1
                     end
-                end 
-                j += 1 
-            end 
+                end
+                j += 1
+            end
             i += 1
         end
 
@@ -80,8 +81,8 @@ function NonAdapMain(NonAdap, Prob)
             while j <= LenSigma
                 rep = 1
                 while rep <= TotalRep
-                    println("NonAdapSQP DecayStep", Idprob, i, j, rep)
-                    X, MuLam, KKT, Time, IdCon, IdSing = NonAdapSQP(nlp,StepDSet[i],Sigma[j],Max_Iter,EPS,epsilon,0)                    
+                    println("NonAdapSQP DecayStep","-",Idprob,"-",i,"-",j,"-",rep)
+                    X, MuLam, KKT, Time, IdCon, IdSing = NonAdapSQP(nlp,StepDSet[i],Sigma[j],Max_Iter,EPS_Step,EPS_Res,epsilon,0)
                     if IdSing == 1
                         break
                     elseif IdCon == 0
@@ -101,5 +102,6 @@ function NonAdapMain(NonAdap, Prob)
         NonAdapR[Idprob] = NonAdapResult(XCStep, MuLamCStep, KKTCStep, TimeCStep, XDStep, MuLamDStep, KKTDStep, TimeDStep)
         finalize(nlp)
     end
+
     return NonAdapR
 end

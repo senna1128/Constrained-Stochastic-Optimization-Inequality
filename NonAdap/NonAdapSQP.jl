@@ -16,12 +16,12 @@
 ### IdSing: indicator of singular
 
 
-function NonAdapSQP(nlp,Step,sigma,Max_Iter,EPS,epsilon,IdConst,rho = 1.5)
+function NonAdapSQP(nlp,Step,sigma,Max_Iter,EPS_Step,EPS_Res,epsilon,IdConst,rho = 2.0)
     # Define constraint types
-    nx, necon, nucon, nlcon = nlp.meta.nvar, length(nlp.meta.jfix), length(nlp.meta.jupp), length(nlp.meta.jlow)
+    nx,necon,nucon,nlcon = nlp.meta.nvar,length(nlp.meta.jfix),length(nlp.meta.jupp),length(nlp.meta.jlow)
     IdUpp, IdLow = necon + 1, necon + nucon + 1
     nicon, ncon = nucon + nlcon, necon + nucon + nlcon
-    SQPDir = zeros(nx+ncon)
+
     # Define constraint bound vector to convert lower bound constraint
     # we order constraints as equality, upper, lower
     BV = zeros(ncon)
@@ -62,12 +62,12 @@ function NonAdapSQP(nlp,Step,sigma,Max_Iter,EPS,epsilon,IdConst,rho = 1.5)
     CovM = sigma*(Diagonal(ones(nx)) + ones(nx, nx))
     # Some other parameters that have to be defined in advance
     IdSing, IdCon = 0, 1
-    nu = 2*sum( max.(c_k[IdUpp:end],zeros(nicon)).^3 ) + 1
-
+    nu = 2*sum(max.(c_k[IdUpp:end],zeros(nicon)).^3) + 1
+    SQPDir = zeros(nx+ncon)
 
     # start the iteration
     Time = time()
-    while min(eps, KKT[end]) > EPS && k < Max_Iter
+    while eps>EPS_Step && KKT[end]>EPS_Res && k < Max_Iter
         ## Obtain the estimate for bnabf_k, bnab2f_k
         bnabf_k = rand(MvNormal(nabf_k, CovM))
         new_bnabf_k = rand(MvNormal(nabf_k, CovM))
@@ -124,7 +124,6 @@ function NonAdapSQP(nlp,Step,sigma,Max_Iter,EPS,epsilon,IdConst,rho = 1.5)
             # prepare for the next iteration
             push!(X, X[end]+Stepsize*SQPDir[1:nx])
             push!(MuLam, MuLam[end]+Stepsize*SQPDir[nx+1:end])
-
             eps, k = norm(Stepsize*SQPDir), k+1
             un_MuLam[nlp.meta.jfix] = MuLam[end][1:necon]
             un_MuLam[nlp.meta.jupp] = MuLam[end][IdUpp:IdLow-1]
